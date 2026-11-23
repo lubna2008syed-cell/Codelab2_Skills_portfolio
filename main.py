@@ -1,315 +1,136 @@
 """
-Exercise 1 - Maths Quiz
-A maths quiz made using Tkinter.
-The player answers 10 addition or subtraction questions.
+Exercise 2 - Alexa tell me a Joke
+A Tkinter joke-telling assistant. Jokes are read from randomJokes.txt,
+where each line holds a setup and a punchline separated by a question mark.
 """
 
 import tkinter as tk
 from tkinter import messagebox
 import random
+import os
 
-# Colours used in the quiz
-BG_COLOUR = "#EAE2F4"
-BUTTON_COLOUR = "#796391"
-TEXT_COLOUR = "#49385E"
-WHITE = "#FFFFFF"
+# ---------------------------------------------------------------
+# Global variables
+# ---------------------------------------------------------------
+jokes = []              # list of (setup, punchline) pairs
+currentPunchline = ""   # punchline of the joke currently on screen
 
-# Quiz variables
-TOTAL_QUESTIONS = 10
+# The joke file should be in the same folder as this script,
+# or in a "resources" folder next to it (or one folder up).
+scriptFolder = os.path.dirname(os.path.abspath(__file__))
+possiblePaths = [
+    os.path.join(scriptFolder, "randomJokes.txt"),
+    os.path.join(scriptFolder, "resources", "randomJokes.txt"),
+    os.path.join(scriptFolder, "..", "resources", "randomJokes.txt"),
+]
 
-difficulty = 1
-score = 0
-questionNumber = 0
-attempt = 1
-correctAnswer = 0
-answerEntry = None
-attemptLabel = None
-scoreLabel = None
 
-# Create the main window
+# ---------------------------------------------------------------
+# Functions
+# ---------------------------------------------------------------
+def loadJokes():
+    """Read the joke file and return a list of (setup, punchline) tuples."""
+    jokeList = []
+
+    # Find the first path that exists
+    filePath = None
+    for path in possiblePaths:
+        if os.path.exists(path):
+            filePath = path
+            break
+
+    if filePath is None:
+        return jokeList  # empty list: the caller will show an error
+
+    with open(filePath, "r", encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+
+            # Skip empty lines and lines with no question mark
+            if line == "" or "?" not in line:
+                continue
+
+            # Remove the "- " at the start of the line if it is there
+            if line.startswith("-"):
+                line = line[1:].strip()
+
+            # Split at the FIRST question mark only
+            position = line.index("?")
+            setup = line[:position + 1]               # keep the "?"
+            punchline = line[position + 1:].strip()   # everything after it
+
+            jokeList.append((setup, punchline))
+
+    return jokeList
+
+
+def tellJoke():
+    """Pick a random joke and show only the setup."""
+    global currentPunchline
+
+    joke = random.choice(jokes)
+    currentPunchline = joke[1]
+
+    setupLabel.config(text=joke[0])
+    punchlineLabel.config(text="")   # hide the previous punchline
+
+    # Now that a joke is showing, the other buttons can be used
+    punchlineButton.config(state="normal")
+    nextButton.config(state="normal")
+
+
+def showPunchline():
+    """Show the punchline below the setup."""
+    punchlineLabel.config(text=currentPunchline)
+    punchlineButton.config(state="disabled")   # no need to click it twice
+
+
+# ---------------------------------------------------------------
+# Main window
+# ---------------------------------------------------------------
 window = tk.Tk()
-window.title("Maths Quiz")
-window.geometry("420x390")
+window.title("Alexa Joke Assistant")
+window.geometry("520x380")
 window.resizable(False, False)
-window.configure(bg=BG_COLOUR)
 
-# Remove the widgets from the current screen
-def clearWindow():
-    for widget in window.winfo_children():
-        widget.destroy()
+jokes = loadJokes()
+if len(jokes) == 0:
+    messagebox.showerror("File error",
+                         "Could not load any jokes.\n"
+                         "Make sure randomJokes.txt is in the same folder as this program.")
+    window.destroy()
+    raise SystemExit
 
-# Display the difficulty menu
-def displayMenu():
-    clearWindow()
+tk.Label(window, text="Joke Assistant", font=("Arial", 22, "bold")).pack(pady=(20, 10))
 
-    tk.Label(
-        window,
-        text="MATHS QUIZ",
-        font=("Arial", 23, "bold"),
-        bg=BG_COLOUR,
-        fg=TEXT_COLOUR
-    ).pack(pady=(25, 8))
+# Starts the first joke
+alexaButton = tk.Button(window, text="Alexa tell me a Joke", font=("Arial", 13),
+                        width=22, command=tellJoke)
+alexaButton.pack(pady=5)
 
-    tk.Label(
-        window,
-        text="Choose your difficulty level",
-        font=("Arial", 13),
-        bg=BG_COLOUR,
-        fg=TEXT_COLOUR
-    ).pack(pady=10)
+# Labels for the setup and the punchline (wraplength stops long jokes running off screen)
+setupLabel = tk.Label(window, text="", font=("Arial", 14), wraplength=460, height=3)
+setupLabel.pack(pady=(15, 5))
 
-    tk.Button(
-        window, text="Easy - 1 Digit",
-        width=22, font=("Arial", 12),
-        bg=BUTTON_COLOUR, fg=WHITE,
-        command=lambda: startQuiz(1)
-    ).pack(pady=7)
+punchlineLabel = tk.Label(window, text="", font=("Arial", 14, "italic"),
+                          fg="darkgreen", wraplength=460, height=3)
+punchlineLabel.pack(pady=5)
 
-    tk.Button(
-        window, text="Moderate - 2 Digits",
-        width=22, font=("Arial", 12),
-        bg=BUTTON_COLOUR, fg=WHITE,
-        command=lambda: startQuiz(2)
-    ).pack(pady=7)
+# Button row
+buttonFrame = tk.Frame(window)
+buttonFrame.pack(pady=15)
 
-    tk.Button(
-        window, text="Advanced - 4 Digits",
-        width=22, font=("Arial", 12),
-        bg=BUTTON_COLOUR, fg=WHITE,
-        command=lambda: startQuiz(3)
-    ).pack(pady=7)
+punchlineButton = tk.Button(buttonFrame, text="Show Punchline", font=("Arial", 12),
+                            width=14, state="disabled", command=showPunchline)
+punchlineButton.grid(row=0, column=0, padx=5)
 
-# Generate random numbers based on the difficulty
-def randomInt(level):
-    if level == 1:
-        return random.randint(1, 9)
-    elif level == 2:
-        return random.randint(10, 99)
-    else:
-        return random.randint(1000, 9999)
+nextButton = tk.Button(buttonFrame, text="Next Joke", font=("Arial", 12),
+                       width=14, state="disabled", command=tellJoke)
+nextButton.grid(row=0, column=1, padx=5)
 
-# Randomly choose addition or subtraction
-def decideOperation():
-    return random.choice(["+", "-"])
+quitButton = tk.Button(buttonFrame, text="Quit", font=("Arial", 12),
+                       width=14, command=window.destroy)
+quitButton.grid(row=0, column=2, padx=5)
 
-# Display a maths question
-def displayProblem():
-    global questionNumber, attempt, correctAnswer
-    global answerEntry, attemptLabel, scoreLabel
-
-    clearWindow()
-
-    questionNumber += 1
-    attempt = 1
-
-    num1 = randomInt(difficulty)
-    num2 = randomInt(difficulty)
-    operation = decideOperation()
-
-    if operation == "+":
-        correctAnswer = num1 + num2
-    else:
-        correctAnswer = num1 - num2
-
-    tk.Label(
-        window,
-        text=f"Question {questionNumber} of {TOTAL_QUESTIONS}",
-        font=("Arial", 14),
-        bg=BG_COLOUR,
-        fg=TEXT_COLOUR
-    ).pack(pady=(20, 5))
-
-    scoreLabel = tk.Label(
-        window,
-        text=f"Score: {score}",
-        font=("Arial", 12),
-        bg=BG_COLOUR,
-        fg=TEXT_COLOUR
-    )
-    scoreLabel.pack(pady=5)
-
-    tk.Label(
-        window,
-        text=f"{num1} {operation} {num2} = ?",
-        font=("Arial", 27, "bold"),
-        bg=BG_COLOUR,
-        fg=TEXT_COLOUR
-    ).pack(pady=20)
-
-    answerEntry = tk.Entry(
-        window,
-        font=("Arial", 18),
-        width=10,
-        justify="center",
-        bg=WHITE,
-        fg=TEXT_COLOUR
-    )
-    answerEntry.pack(pady=5)
-    answerEntry.focus()
-
-    answerEntry.bind("<Return>", lambda event: submitAnswer())
-
-    attemptLabel = tk.Label(
-        window,
-        text="Attempt 1 of 2",
-        font=("Arial", 11),
-        bg=BG_COLOUR,
-        fg=TEXT_COLOUR
-    )
-    attemptLabel.pack(pady=10)
-
-    tk.Button(
-        window,
-        text="Submit",
-        font=("Arial", 12),
-        width=14,
-        bg=BUTTON_COLOUR,
-        fg=WHITE,
-        command=submitAnswer
-    ).pack(pady=5)
-
-# Check whether the player's answer is correct
-def isCorrect(userAnswer, rightAnswer, tryNumber):
-    if userAnswer == rightAnswer:
-        if tryNumber == 1:
-            messagebox.showinfo("Correct", "Well done! You earned 10 points.")
-        else:
-            messagebox.showinfo("Correct", "Correct! You earned 5 points.")
-        return True
-
-    if tryNumber == 1:
-        messagebox.showwarning(
-            "Wrong Answer",
-            "That's not correct. You have one more chance!"
-        )
-    else:
-        messagebox.showerror(
-            "Wrong Answer",
-            f"Sorry! The correct answer was {rightAnswer}."
-        )
-
-    return False
-
-# Move to the next question or show the final results
-def nextQuestion():
-    if questionNumber < TOTAL_QUESTIONS:
-        displayProblem()
-    else:
-        displayResults()
-
-# Accept and check the player's answer
-def submitAnswer():
-    global score, attempt
-
-    text = answerEntry.get().strip()
-
-    try:
-        userAnswer = int(text)
-    except ValueError:
-        messagebox.showerror(
-            "Invalid Input",
-            "Please enter a whole number."
-        )
-        answerEntry.delete(0, tk.END)
-        return
-
-    if isCorrect(userAnswer, correctAnswer, attempt):
-
-        if attempt == 1:
-            score += 10
-        else:
-            score += 5
-
-        nextQuestion()
-
-    else:
-        if attempt == 1:
-            attempt = 2
-            attemptLabel.config(text="Attempt 2 of 2")
-            answerEntry.delete(0, tk.END)
-            answerEntry.focus()
-        else:
-            nextQuestion()
-
-# Display the final score and grade
-def displayResults():
-    clearWindow()
-
-    if score > 90:
-        grade = "A+"
-    elif score >= 80:
-        grade = "A"
-    elif score >= 70:
-        grade = "B"
-    elif score >= 60:
-        grade = "C"
-    elif score >= 50:
-        grade = "D"
-    else:
-        grade = "F"
-
-    tk.Label(
-        window,
-        text="QUIZ COMPLETE!",
-        font=("Arial", 22, "bold"),
-        bg=BG_COLOUR,
-        fg=TEXT_COLOUR
-    ).pack(pady=(35, 15))
-
-    tk.Label(
-        window,
-        text=f"Your score: {score} / 100",
-        font=("Arial", 16),
-        bg=BG_COLOUR,
-        fg=TEXT_COLOUR
-    ).pack(pady=8)
-
-    tk.Label(
-        window,
-        text=f"Your grade: {grade}",
-        font=("Arial", 21, "bold"),
-        bg=BG_COLOUR,
-        fg=TEXT_COLOUR
-    ).pack(pady=8)
-
-    tk.Label(
-        window,
-        text="Would you like to play again?",
-        font=("Arial", 12),
-        bg=BG_COLOUR,
-        fg=TEXT_COLOUR
-    ).pack(pady=15)
-
-    tk.Button(
-        window,
-        text="Play Again",
-        width=15,
-        font=("Arial", 12),
-        bg=BUTTON_COLOUR,
-        fg=WHITE,
-        command=displayMenu
-    ).pack(pady=5)
-
-    tk.Button(
-        window,
-        text="Quit",
-        width=15,
-        font=("Arial", 12),
-        bg=BUTTON_COLOUR,
-        fg=WHITE,
-        command=window.destroy
-    ).pack(pady=5)
-
-# Start a new quiz
-def startQuiz(level):
-    global difficulty, score, questionNumber
-
-    difficulty = level
-    score = 0
-    questionNumber = 0
-
-    displayProblem()
-
-# Start the program
-displayMenu()
+window.geometry("560x380")
 window.mainloop()
